@@ -1,14 +1,18 @@
-# This is the default target, which will be built when 
-# you invoke make
-.PHONY: all
-all: hello
+INTIFACE_ENGINE_VERSION ?= v1.4.8
+INTIFACE_ENGINE_FILENAME = intiface-engine-linux-x64-Release.zip
+INTIFACE_ENGINE_URL = https://github.com/intiface/intiface-engine/releases/download/$(INTIFACE_ENGINE_VERSION)/$(INTIFACE_ENGINE_FILENAME)
 
-# This rule tells make how to build hello from hello.cpp
-hello:
+.PHONY: all clean
+
+all: ./out/intiface-engine
+
+./out/intiface-engine:
 	mkdir -p ./out
-	gcc -o ./out/hello ./src/main.c 
+	curl -fL -o ./out/intiface-engine.zip "$(INTIFACE_ENGINE_URL)"
+	unzip -o ./out/intiface-engine.zip intiface-engine -d ./out/
+	rm ./out/intiface-engine.zip
+	chmod +x ./out/intiface-engine
 
-# This rule tells make to delete hello and hello.o
-.PHONY: clean 
+.PHONY: clean
 clean:
-	rm -f hello
+	rm -rf ./out
