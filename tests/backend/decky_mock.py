@@ -33,7 +33,7 @@ def make_decky_mock(settings_dir: Path) -> ModuleType:
     mod.DECKY_PLUGIN_RUNTIME_DIR = str(settings_dir / "runtime")
     mod.DECKY_PLUGIN_LOG_DIR = str(settings_dir / "logs")
     mod.DECKY_PLUGIN_DIR = str(settings_dir / "plugin")
-    mod.DECKY_PLUGIN_NAME = "decky-intiface"
+    mod.DECKY_PLUGIN_NAME = "decky-toy-haptics"
     mod.migrate_logs = lambda *a, **kw: {}
     mod.migrate_settings = lambda *a, **kw: {}
     mod.migrate_runtime = lambda *a, **kw: {}

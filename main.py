@@ -67,7 +67,7 @@ class Plugin:
     async def _connect_client(self) -> None:
         from buttplug import Client, WebsocketConnector, ProtocolSpec  # lazy import
         port = self._settings["port"]
-        self._client = Client("decky-intiface", ProtocolSpec.v3)
+        self._client = Client("decky-toy-haptics", ProtocolSpec.v3)
         connector = WebsocketConnector(f"ws://127.0.0.1:{port}")
         await self._client.connect(connector)
 
@@ -164,17 +164,17 @@ class Plugin:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def _main(self) -> None:
-        decky.logger.info("decky-intiface starting")
+        decky.logger.info("decky-toy-haptics starting")
         await self._load_settings()
         if self._settings.get("autostart", True):
             await self.start_engine()
 
     async def _unload(self) -> None:
-        decky.logger.info("decky-intiface unloading")
+        decky.logger.info("decky-toy-haptics unloading")
         await self.stop_engine()
 
     async def _uninstall(self) -> None:
-        decky.logger.info("decky-intiface uninstalled")
+        decky.logger.info("decky-toy-haptics uninstalled")
 
     async def _migration(self) -> None:
         pass

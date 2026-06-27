@@ -76,7 +76,7 @@ function Content() {
 
   return (
     <>
-      <PanelSection title="Intiface Engine">
+      <PanelSection title="Toy Haptics">
         <PanelSectionRow>
           <ButtonItem layout="below" onClick={handleToggle} disabled={loading}>
             {loading ? 'Working…' : status.running ? 'Stop Engine' : 'Start Engine'}
@@ -135,8 +135,8 @@ export default definePlugin(() => {
   );
 
   return {
-    name: 'Intiface',
-    titleView: <div className={staticClasses.Title}>Intiface</div>,
+    name: 'Toy Haptics',
+    titleView: <div className={staticClasses.Title}>Toy Haptics</div>,
     content: <Content />,
     icon: <FaHeart />,
     onDismount() {

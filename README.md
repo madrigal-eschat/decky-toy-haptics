@@ -1,4 +1,4 @@
-# decky-intiface
+# Toy Haptics
 
 A [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) plugin for Steam Deck that bundles and manages [`intiface-engine`](https://github.com/buttplugio/buttplug) — a headless [Buttplug](https://buttplug.io/) haptics server. Connect and control haptic devices directly from the Quick Access Menu, no separate Intiface Central install needed.
 
@@ -84,7 +84,7 @@ Copy `.vscode/defsettings.json` to `.vscode/settings.json` and set your Deck's I
 ```bash
 rsync -avz --delete \
   dist/ main.py plugin.json package.json py_modules/ \
-  deck@steamdeck.local:/home/deck/homebrew/plugins/Intiface/
+  deck@steamdeck.local:/home/deck/homebrew/plugins/Toy\ Haptics/
 ```
 
 Restart the Decky plugin to pick up changes.

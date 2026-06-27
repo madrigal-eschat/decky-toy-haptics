@@ -1,11 +1,11 @@
 {
-  "name": "Intiface",
+  "name": "Toy Haptics",
   "author": "madrigal-eschat",
   "flags": ["_root"],
   "api_version": 1,
   "publish": {
-    "tags": ["haptics", "intiface", "buttplug"],
-    "description": "Self-contained Intiface Engine management for Steam Deck. Connect haptic devices without needing Intiface Central.",
+    "tags": ["haptics", "buttplug", "vibration", "toys"],
+    "description": "Route Steam Deck game haptics to Buttplug-compatible toys. Bundles intiface-engine — no separate Intiface Central install needed.",
     "image": ""
   }
 }
