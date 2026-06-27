@@ -1,6 +1,6 @@
-INTIFACE_ENGINE_VERSION ?= v1.4.8
-INTIFACE_ENGINE_FILENAME = intiface-engine-linux-x64-Release.zip
-INTIFACE_ENGINE_URL = https://github.com/intiface/intiface-engine/releases/download/$(INTIFACE_ENGINE_VERSION)/$(INTIFACE_ENGINE_FILENAME)
+INTIFACE_ENGINE_VERSION ?= intiface-engine-4.0.2
+INTIFACE_ENGINE_FILENAME = intiface-engine-v4.0.2-linux-x64.zip
+INTIFACE_ENGINE_URL = https://github.com/buttplugio/buttplug/releases/download/$(INTIFACE_ENGINE_VERSION)/$(INTIFACE_ENGINE_FILENAME)
 
 .PHONY: all clean
 

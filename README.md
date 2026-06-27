@@ -1,6 +1,6 @@
 # decky-intiface
 
-A [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) plugin for Steam Deck that bundles and manages [`intiface-engine`](https://github.com/intiface/intiface-engine) — a headless [Buttplug](https://buttplug.io/) haptics server. Connect and control haptic devices directly from the Quick Access Menu, no separate Intiface Central install needed.
+A [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) plugin for Steam Deck that bundles and manages [`intiface-engine`](https://github.com/buttplugio/buttplug) — a headless [Buttplug](https://buttplug.io/) haptics server. Connect and control haptic devices directly from the Quick Access Menu, no separate Intiface Central install needed.
 
 ## Features
 
