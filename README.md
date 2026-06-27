@@ -67,40 +67,15 @@ pnpm run watch
 
 ## Packaging for the Deck
 
-### 1. Download the intiface-engine binary
-
-The `backend/Makefile` downloads the correct Linux x86_64 binary from the intiface-engine GitHub releases:
+Install the [Decky CLI](https://github.com/SteamDeckHomebrew/cli) (requires Docker):
 
 ```bash
-cd backend && make
-```
-
-This produces `backend/out/intiface-engine`. The binary is excluded from git (see `.gitignore`).
-
-### 2. Build the frontend
-
-```bash
-pnpm run build
-```
-
-### 3. Create the distribution zip
-
-The Decky CLI tool assembles the zip. From the repo root:
-
-```bash
-# If you have the Decky CLI installed:
 decky plugin build
-
-# Or manually assemble:
-mkdir -p out/Intiface/bin
-cp -r dist out/Intiface/
-cp main.py plugin.json package.json README.md LICENSE out/Intiface/
-cp -r py_modules out/Intiface/
-cp backend/out/intiface-engine out/Intiface/bin/
-cd out && zip -r Intiface.zip Intiface/
 ```
 
-Upload `out/Intiface.zip` to your Deck via the Decky Loader "Install from ZIP" option.
+This single command builds the backend binary inside a SteamOS Docker container, compiles the frontend, and produces a ready-to-install zip at `out/Intiface.zip`.
+
+Install it on your Deck via Decky Loader → "Install from ZIP".
 
 ### Deploy directly to a Deck (VSCode / rsync)
 
