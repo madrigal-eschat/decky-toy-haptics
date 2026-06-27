@@ -63,6 +63,12 @@ src/index.tsx                   Frontend (extended)
 
 Each device is identified by its `phys` string from `EVIOCGPHYS` (e.g. `steam-input/0`, `usb-0000:00:14.0-2/input0`). Falls back to `basename(path)` (e.g. `event5`) if `phys` is empty. This ID is stable across reboots and tied to physical port/slot.
 
+### Output throttling
+
+The probe enforces a minimum 10ms interval between emitted BSON frames. If a haptic sequence would produce points closer than 10ms apart, points are merged (take the higher intensity) or dropped to respect the interval. This matches the minimum sensible Buttplug command rate and prevents overwhelming the IPC pipe.
+
+`stop` events are **exempt from throttling** — they are emitted immediately and bypass the 10ms gate. On the Python side, a received `stop` cancels any in-flight sequence task for that device and sends `ScalarCmd(0)` without waiting for the next scheduled point.
+
 ### CLI interface
 
 ```
@@ -263,6 +269,7 @@ No kernel/eBPF required — pure translation logic:
 | `test_periodic_sine` | Sine wave samples match expected values |
 | `test_periodic_square` | Square wave samples |
 | `test_envelope_attack_fade` | Envelope shaping applied correctly |
+| `test_throttle` | Points closer than 10ms are merged/dropped; stop events bypass throttle |
 | `test_bson_framing` | Output is valid BSON, self-delimiting |
 
 ### Frontend (`tests/frontend/bridge.spec.ts`)
