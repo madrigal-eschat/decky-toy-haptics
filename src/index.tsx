@@ -2,114 +2,148 @@ import {
   ButtonItem,
   PanelSection,
   PanelSectionRow,
-  Navigation,
-  staticClasses
-} from "@decky/ui";
+  staticClasses,
+} from '@decky/ui';
 import {
   addEventListener,
   removeEventListener,
   callable,
   definePlugin,
-  toaster,
-  // routerHook
-} from "@decky/api"
-import { useState } from "react";
-import { FaShip } from "react-icons/fa";
+} from '@decky/api';
+import { useState, useEffect } from 'react';
+import { FaHeart } from 'react-icons/fa';
 
-// import logo from "../assets/logo.png";
+const startEngine = callable<[], { success: boolean; error?: string }>('start_engine');
+const stopEngine = callable<[], { success: boolean }>('stop_engine');
+const getStatus = callable<[], { running: boolean; connected: boolean; port: number }>('get_status');
+const getDevices = callable<[], { id: number; name: string; actuators: number }[]>('get_devices');
 
-// This function calls the python function "add", which takes in two numbers and returns their sum (as a number)
-// Note the type annotations:
-//  the first one: [first: number, second: number] is for the arguments
-//  the second one: number is for the return value
-const add = callable<[first: number, second: number], number>("add");
-
-// This function calls the python function "start_timer", which takes in no arguments and returns nothing.
-// It starts a (python) timer which eventually emits the event 'timer_event'
-const startTimer = callable<[], void>("start_timer");
+type DeviceInfo = { id: number; name: string; actuators: number };
+type EngineStatus = { running: boolean; connected: boolean; port: number };
 
 function Content() {
-  const [result, setResult] = useState<number | undefined>();
+  const [status, setStatus] = useState<EngineStatus>({
+    running: false,
+    connected: false,
+    port: 12345,
+  });
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const onClick = async () => {
-    const result = await add(Math.random(), Math.random());
-    setResult(result);
+  const refreshStatus = async () => {
+    const s = await getStatus();
+    if (s) setStatus(s);
+  };
+
+  const refreshDevices = async () => {
+    const d = await getDevices();
+    if (d) setDevices(d);
+  };
+
+  useEffect(() => {
+    refreshStatus();
+    refreshDevices();
+
+    const onStatusChanged = () => void refreshStatus();
+    const onDevicesChanged = () => void refreshDevices();
+
+    window.addEventListener('intiface:status_changed', onStatusChanged);
+    window.addEventListener('intiface:devices_changed', onDevicesChanged);
+
+    return () => {
+      window.removeEventListener('intiface:status_changed', onStatusChanged);
+      window.removeEventListener('intiface:devices_changed', onDevicesChanged);
+    };
+  }, []);
+
+  const handleToggle = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (status.running) {
+        await stopEngine();
+      } else {
+        const result = await startEngine();
+        if (!result.success && result.error) {
+          setError(result.error);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <PanelSection title="Panel Section">
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={onClick}
-        >
-          {result ?? "Add two numbers via Python"}
-        </ButtonItem>
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={() => startTimer()}
-        >
-          {"Start Python timer"}
-        </ButtonItem>
-      </PanelSectionRow>
+    <>
+      <PanelSection title="Intiface Engine">
+        <PanelSectionRow>
+          <ButtonItem layout="below" onClick={handleToggle} disabled={loading}>
+            {loading ? 'Working…' : status.running ? 'Stop Engine' : 'Start Engine'}
+          </ButtonItem>
+        </PanelSectionRow>
+        {error && (
+          <PanelSectionRow>
+            <div style={{ color: '#f88', fontSize: '12px' }}>{error}</div>
+          </PanelSectionRow>
+        )}
+        <PanelSectionRow>
+          <div style={{ fontSize: '12px', color: status.connected ? '#8f8' : '#888' }}>
+            {status.connected
+              ? `Connected · port ${status.port}`
+              : 'Disconnected'}
+          </div>
+        </PanelSectionRow>
+      </PanelSection>
 
-      {/* <PanelSectionRow>
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <img src={logo} />
-        </div>
-      </PanelSectionRow> */}
-
-      {/*<PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={() => {
-            Navigation.Navigate("/decky-plugin-test");
-            Navigation.CloseSideMenus();
-          }}
-        >
-          Router
-        </ButtonItem>
-      </PanelSectionRow>*/}
-    </PanelSection>
+      <PanelSection title="Devices">
+        {devices.length === 0 ? (
+          <PanelSectionRow>
+            <div style={{ fontSize: '12px', color: '#888' }}>No devices connected</div>
+          </PanelSectionRow>
+        ) : (
+          devices.map(dev => (
+            <PanelSectionRow key={dev.id}>
+              <div style={{ fontSize: '13px' }}>{dev.name}</div>
+            </PanelSectionRow>
+          ))
+        )}
+      </PanelSection>
+    </>
   );
-};
+}
 
 export default definePlugin(() => {
-  console.log("Template plugin initializing, this is called once on frontend startup")
-
-  // serverApi.routerHook.addRoute("/decky-plugin-test", DeckyPluginRouterTest, {
-  //   exact: true,
-  // });
-
-  // Add an event listener to the "timer_event" event from the backend
-  const listener = addEventListener<[
-    test1: string,
-    test2: boolean,
-    test3: number
-  ]>("timer_event", (test1, test2, test3) => {
-    console.log("Template got timer_event with:", test1, test2, test3)
-    toaster.toast({
-      title: "template got timer_event",
-      body: `${test1}, ${test2}, ${test3}`
-    });
+  const engineStatusListener = addEventListener<
+    [running: boolean, connected: boolean, port: number]
+  >('engine_status_changed', (_running, _connected, _port) => {
+    window.dispatchEvent(new CustomEvent('intiface:status_changed'));
   });
 
+  const deviceAddedListener = addEventListener<[id: number, name: string, actuators: number]>(
+    'device_added',
+    (_id, _name, _actuators) => {
+      window.dispatchEvent(new CustomEvent('intiface:devices_changed'));
+    }
+  );
+
+  const deviceRemovedListener = addEventListener<[id: number]>(
+    'device_removed',
+    (_id) => {
+      window.dispatchEvent(new CustomEvent('intiface:devices_changed'));
+    }
+  );
+
   return {
-    // The name shown in various decky menus
-    name: "Test Plugin",
-    // The element displayed at the top of your plugin's menu
-    titleView: <div className={staticClasses.Title}>Decky Example Plugin</div>,
-    // The content of your plugin's menu
+    name: 'Intiface',
+    titleView: <div className={staticClasses.Title}>Intiface</div>,
     content: <Content />,
-    // The icon displayed in the plugin list
-    icon: <FaShip />,
-    // The function triggered when your plugin unloads
+    icon: <FaHeart />,
     onDismount() {
-      console.log("Unloading")
-      removeEventListener("timer_event", listener);
-      // serverApi.routerHook.removeRoute("/decky-plugin-test");
+      removeEventListener('engine_status_changed', engineStatusListener);
+      removeEventListener('device_added', deviceAddedListener);
+      removeEventListener('device_removed', deviceRemovedListener);
     },
   };
 });
+
