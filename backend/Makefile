@@ -9,7 +9,7 @@ all: ./out/intiface-engine
 ./out/intiface-engine:
 	mkdir -p ./out
 	curl -fL -o ./out/intiface-engine.zip "$(INTIFACE_ENGINE_URL)"
-	unzip -o ./out/intiface-engine.zip intiface-engine -d ./out/
+	python3 -c "import zipfile; zipfile.ZipFile('./out/intiface-engine.zip').extract('intiface-engine', './out/')"
 	rm ./out/intiface-engine.zip
 	chmod +x ./out/intiface-engine
 
