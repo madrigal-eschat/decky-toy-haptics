@@ -1,18 +1,33 @@
 INTIFACE_ENGINE_VERSION ?= intiface-engine-4.0.2
 INTIFACE_ENGINE_FILENAME = intiface-engine-v4.0.2-linux-x64.zip
 INTIFACE_ENGINE_URL = https://github.com/buttplugio/buttplug/releases/download/$(INTIFACE_ENGINE_VERSION)/$(INTIFACE_ENGINE_FILENAME)
+HAPTICS_PROBE_TARGET = x86_64-unknown-linux-musl
+
+HAPTICS_PROBE_TARGET = x86_64-unknown-linux-musl
 
 .PHONY: all clean
 
-all: ./out/intiface-engine
+all: ./out/intiface-engine haptics-probe
 
 ./out/intiface-engine:
 	mkdir -p ./out
-	curl -fL -o ./out/intiface-engine.zip "$(INTIFACE_ENGINE_URL)"
-	python3 -c "import zipfile; zipfile.ZipFile('./out/intiface-engine.zip').extract('intiface-engine', './out/')"
-	rm ./out/intiface-engine.zip
-	chmod +x ./out/intiface-engine
+	$(MAKE) -s -C py build
 
-.PHONY: clean
+.PHONY: haptics-probe
+haptics-probe:
+	mkdir -p ./out
+	cd haptics-probe && \
+	  cargo build --release --target $(HAPTICS_PROBE_TARGET) \
+	    --package haptics-probe
+	cp haptics-probe/target/$(HAPTICS_PROBE_TARGET)/release/haptics-probe ./out/haptics-probe
+
 clean:
 	rm -rf ./out
+
+.PHONY: haptics-probe
+haptics-probe:
+	mkdir -p ./out
+	cd haptics-probe && \
+	  cargo build --release --target $(HAPTICS_PROBE_TARGET) \
+	    --package haptics-probe
+	cp haptics-probe/target/$(HAPTICS_PROBE_TARGET)/release/haptics-probe ./out/haptics-probe
