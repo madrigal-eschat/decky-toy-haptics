@@ -2,6 +2,7 @@ import {
   ButtonItem,
   PanelSection,
   PanelSectionRow,
+  SliderField,
   staticClasses,
 } from '@decky/ui';
 import {
@@ -189,16 +190,16 @@ function BridgePanel() {
         </>
       )}
       <PanelSectionRow>
-        <div style={{ fontSize: '12px' }}>Intensity Scale</div>
-        <input
-          type="range" min={0} max={1} step={0.05}
-          value={scale}
-          onChange={e => handleScale(parseFloat(e.target.value))}
-          style={{ width: '100%' }}
+        <SliderField
+          label="Intensity Scale"
+          value={Math.round(scale * 100)}
+          min={0}
+          max={100}
+          step={5}
+          showValue
+          valueSuffix="%"
+          onChange={v => handleScale(v / 100)}
         />
-        <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'right' }}>
-          {(scale * 100).toFixed(0)}%
-        </div>
       </PanelSectionRow>
     </PanelSection>
   );

@@ -57,3 +57,4 @@ cli/*
 cli/decky
 backend/out/
 backend/haptics-probe/target
+backend/.cargo-home

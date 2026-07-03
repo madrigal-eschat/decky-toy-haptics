@@ -4,6 +4,7 @@ import asyncio
 import struct
 import decky
 import bson
+from datetime import datetime
 
 SETTINGS_FILE = "settings.json"
 DEFAULT_SETTINGS: dict = {
@@ -13,6 +14,25 @@ DEFAULT_SETTINGS: dict = {
     "bridge_device_map": {},
     "bridge_intensity_scale": 1.0,
 }
+
+
+class FileLogger:
+    """Dedicated, append-mode log file for a subprocess/subsystem, kept
+    separate from the main plugin log so each component's output can be
+    tailed on its own."""
+
+    def __init__(self, filename: str) -> None:
+        self._path = os.path.join(decky.DECKY_PLUGIN_LOG_DIR, filename)
+        os.makedirs(os.path.dirname(self._path), exist_ok=True)
+        self._file = open(self._path, "a")
+
+    def write(self, text: str) -> None:
+        ts = datetime.now().isoformat(timespec="milliseconds")
+        self._file.write(f"[{ts}] {text}\n")
+        self._file.flush()
+
+    def close(self) -> None:
+        self._file.close()
 
 
 # ── HapticsBridge ────────────────────────────────────────────────────────────
@@ -26,20 +46,32 @@ class HapticsBridge:
         self._device_map: dict = {}
         self._process: asyncio.subprocess.Process | None = None
         self._reader_task: asyncio.Task | None = None
+        self._stderr_task: asyncio.Task | None = None
         self._sequence_tasks: dict[str, asyncio.Task] = {}  # device_id → running sequence
+        self._log: FileLogger | None = None
 
     async def start(self, client, settings: dict) -> None:
         self._client = client
         self._scale = float(settings.get("bridge_intensity_scale", 1.0))
         self._device_map = settings.get("bridge_device_map", {})
+        self._log = FileLogger("haptics-probe.log")
 
         bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "haptics-probe")
         self._process = await asyncio.create_subprocess_exec(
             bin_path,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         self._reader_task = asyncio.create_task(self._reader_loop())
+        self._stderr_task = asyncio.create_task(self._log_stderr())
+
+    async def _log_stderr(self) -> None:
+        assert self._process is not None and self._process.stderr is not None
+        try:
+            async for line in self._process.stderr:
+                self._log.write(line.decode(errors='replace').rstrip())
+        except asyncio.CancelledError:
+            pass
 
     async def stop(self) -> None:
         for task in self._sequence_tasks.values():
@@ -54,13 +86,26 @@ class HapticsBridge:
                 pass
             self._reader_task = None
 
-        if self._process is not None:
-            self._process.terminate()
+        if self._stderr_task is not None:
+            self._stderr_task.cancel()
             try:
-                await asyncio.wait_for(self._process.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                self._process.kill()
+                await self._stderr_task
+            except asyncio.CancelledError:
+                pass
+            self._stderr_task = None
+
+        if self._process is not None:
+            if self._process.returncode is None:
+                self._process.terminate()
+                try:
+                    await asyncio.wait_for(self._process.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    self._process.kill()
             self._process = None
+
+        if self._log is not None:
+            self._log.close()
+            self._log = None
 
         self._client = None
 
@@ -70,27 +115,32 @@ class HapticsBridge:
     async def _reader_loop(self) -> None:
         assert self._process is not None and self._process.stdout is not None
         reader = self._process.stdout
+        self._log.write("reader loop started")
         try:
             while True:
                 header = await reader.readexactly(4)
                 length = struct.unpack_from("<i", header)[0]
                 if length < 5:
+                    self._log.write(f"bogus BSON length {length}, skipping")
                     continue
                 rest = await reader.readexactly(length - 4)
                 doc = bson.loads(header + rest)
                 await self._dispatch(doc)
         except (asyncio.IncompleteReadError, asyncio.CancelledError):
-            pass
+            self._log.write("reader loop ended (stream closed)")
         except Exception as e:
-            decky.logger.warning(f"HapticsBridge reader error: {e}")
+            self._log.write(f"reader error: {e}")
 
     async def _dispatch(self, doc: dict) -> None:
         msg_type = doc.get("type")
+        self._log.write(f"received doc type={msg_type!r} device={doc.get('device')!r}")
         if msg_type == "haptic":
             device = doc.get("device", "")
             points = doc.get("points", [])
             if points:
                 self._schedule_sequence(device, points)
+            else:
+                self._log.write("haptic doc had no points, ignoring")
         elif msg_type == "stop":
             device = doc.get("device", "")
             await self._send_stop(device)
@@ -125,21 +175,31 @@ class HapticsBridge:
 
     async def _send_scalar(self, device: str, intensity: float) -> None:
         if self._client is None:
+            self._log.write(f"send_scalar({device!r}, {intensity}): no client, dropping")
             return
         targets = self._device_map.get(device)  # None = all
         intensity = max(0.0, min(1.0, intensity))
+        sent = 0
         for dev in self._client.devices.values():
             if targets is not None and dev.index not in targets:
                 continue
             try:
                 if hasattr(dev, "actuators") and dev.actuators:
                     await dev.actuators[0].command(intensity)
+                    sent += 1
+                else:
+                    self._log.write(f"device {dev.index} ({dev.name}) has no actuators, skipping")
             except Exception as e:
-                decky.logger.warning(f"ScalarCmd failed for device {dev.index}: {e}")
+                self._log.write(f"ScalarCmd failed for device {dev.index}: {e}")
+        if sent == 0:
+            self._log.write(f"send_scalar({device!r}, {intensity}): no matching toy received it (client has {len(self._client.devices)} device(s))")
 
 
 class Plugin:
     _process: asyncio.subprocess.Process | None = None
+    _process_log_task: asyncio.Task | None = None
+    _process_log_tail: list = []
+    _engine_log: "FileLogger | None" = None
     _client = None
     _polling_task: asyncio.Task | None = None
     _devices: dict = {}
@@ -190,18 +250,42 @@ class Plugin:
             bin_path,
             "--websocket-port", str(self._settings["port"]),
             "--use-bluetooth-le",
-            "--use-hid",
             "--use-lovense-dongle-hid",
             "--use-lovense-connect",
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
+        self._engine_log = FileLogger("intiface-engine.log")
+        self._process_log_task = asyncio.create_task(self._log_subprocess_output())
+
+    async def _log_subprocess_output(self) -> None:
+        assert self._process is not None and self._process.stdout is not None
+        try:
+            async for line in self._process.stdout:
+                text = line.decode(errors='replace').rstrip()
+                self._engine_log.write(text)
+                self._process_log_tail.append(text)
+                if len(self._process_log_tail) > 20:
+                    self._process_log_tail.pop(0)
+        except asyncio.CancelledError:
+            pass
 
     async def _stop_subprocess(self) -> None:
+        if self._process_log_task is not None:
+            self._process_log_task.cancel()
+            try:
+                await self._process_log_task
+            except asyncio.CancelledError:
+                pass
+            self._process_log_task = None
         if self._process is not None:
-            self._process.terminate()
-            await self._process.wait()
+            if self._process.returncode is None:
+                self._process.terminate()
+                await self._process.wait()
             self._process = None
+        if self._engine_log is not None:
+            self._engine_log.close()
+            self._engine_log = None
 
     # ── Buttplug client ───────────────────────────────────────────────────────
 
@@ -211,13 +295,17 @@ class Plugin:
         self._client = Client("decky-toy-haptics", ProtocolSpec.v3)
         connector = WebsocketConnector(f"ws://127.0.0.1:{port}")
         await self._client.connect(connector)
+        decky.logger.info(f"Connected to buttplug server at ws://127.0.0.1:{port}")
 
         # Emit device_added for any devices already known after connect
         # (buttplug-py populates client.devices from RequestDeviceList on connect)
         for dev_id, dev in self._client.devices.items():
             actuators = len(dev.actuators) if hasattr(dev, "actuators") else 0
             self._devices[dev_id] = dev
+            decky.logger.info(f"Device already known on connect: {dev.name} (id={dev_id}, actuators={actuators})")
             await decky.emit("device_added", dev_id, dev.name, actuators)
+
+        decky.logger.info(f"Initial device count: {len(self._devices)}")
 
         # Start background scan loop for ongoing discovery
         self._polling_task = asyncio.create_task(self._scan_loop())
@@ -229,17 +317,27 @@ class Plugin:
             if self._client is None:
                 break
             try:
+                decky.logger.info("Scan loop: starting scan")
                 scan_future = await self._client.start_scanning()
-                await asyncio.wait_for(asyncio.shield(scan_future), timeout=5.0)
+                try:
+                    await asyncio.wait_for(asyncio.shield(scan_future), timeout=5.0)
+                    decky.logger.info("Scan loop: scan completed")
+                except asyncio.TimeoutError:
+                    decky.logger.info("Scan loop: scan still running after 5s, checking devices anyway")
                 current = self._client.devices
                 current_ids = set(current.keys())
                 known_ids = set(self._devices.keys())
-                for dev_id in current_ids - known_ids:
+                added = current_ids - known_ids
+                removed = known_ids - current_ids
+                decky.logger.info(f"Scan loop: {len(current_ids)} device(s) known to client, {len(added)} new, {len(removed)} gone")
+                for dev_id in added:
                     dev = current[dev_id]
                     actuators = len(dev.actuators) if hasattr(dev, "actuators") else 0
                     self._devices[dev_id] = dev
+                    decky.logger.info(f"Device added: {dev.name} (id={dev_id}, actuators={actuators})")
                     await decky.emit("device_added", dev_id, dev.name, actuators)
-                for dev_id in list(known_ids - current_ids):
+                for dev_id in list(removed):
+                    decky.logger.info(f"Device removed: id={dev_id}")
                     del self._devices[dev_id]
                     await decky.emit("device_removed", dev_id)
             except asyncio.CancelledError:
@@ -302,9 +400,17 @@ class Plugin:
     # ── Public callables ──────────────────────────────────────────────────────
 
     async def start_engine(self) -> dict:
+        self._process_log_tail.clear()
         try:
             await self._start_subprocess()
             await asyncio.sleep(self._startup_delay)
+
+            if self._process is not None and self._process.returncode is not None:
+                tail = "\n".join(self._process_log_tail) or "no output captured"
+                raise RuntimeError(
+                    f"intiface-engine exited immediately (code {self._process.returncode}): {tail}"
+                )
+
             await self._connect_client()
             await decky.emit("engine_status_changed", True, True, self._settings["port"])
 
@@ -315,6 +421,8 @@ class Plugin:
             return {"success": True}
         except Exception as e:
             decky.logger.error(f"start_engine failed: {e}")
+            await self._stop_subprocess()
+            await decky.emit("engine_status_changed", False, False, self._settings["port"])
             await decky.emit("error", str(e))
             return {"success": False, "error": str(e)}
 
