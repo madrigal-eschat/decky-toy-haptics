@@ -1,4 +1,6 @@
 import asyncio
+import json
+import os
 import pytest
 import bson
 from tests.backend.conftest import MockProbeController
@@ -120,3 +122,56 @@ async def test_set_bridge_enabled_emits_status_event(plugin, mock_subprocess, mo
     assert len(events) == 1
     enabled, device = events[0]
     assert enabled is True
+
+
+# ── bridge callables / settings ──────────────────────────────────────
+
+async def test_set_bridge_scale_updates_bridge(plugin, mock_subprocess, mock_server, mock_probe):
+    plugin._settings = {"port": mock_server.port, "autostart": False,
+                        "bridge_enabled": True, "bridge_device_map": {},
+                        "bridge_intensity_scale": 1.0}
+    await plugin.start_engine()
+
+    result = await plugin.set_bridge_scale(0.3)
+    assert result == {"success": True}
+    assert plugin._bridge._scale == pytest.approx(0.3)
+
+
+async def test_update_settings_persists_bridge_fields(plugin, inject_decky):
+    await plugin.update_settings(bridge_intensity_scale=0.7, bridge_enabled=False)
+
+    path = os.path.join(inject_decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
+    with open(path) as f:
+        saved = json.load(f)
+    assert saved["bridge_intensity_scale"] == pytest.approx(0.7)
+    assert saved["bridge_enabled"] is False
+
+
+# ── lifecycle integration ─────────────────────────────────────────────
+
+async def test_bridge_starts_with_engine_when_enabled(plugin, mock_subprocess, mock_server, mock_probe):
+    plugin._settings = {"port": mock_server.port, "autostart": False,
+                        "bridge_enabled": True, "bridge_device_map": {},
+                        "bridge_intensity_scale": 1.0}
+    await plugin.start_engine()
+
+    assert plugin._bridge is not None
+
+
+async def test_bridge_does_not_start_when_disabled(plugin, mock_subprocess, mock_server):
+    plugin._settings = {"port": mock_server.port, "autostart": False,
+                        "bridge_enabled": False, "bridge_device_map": {},
+                        "bridge_intensity_scale": 1.0}
+    await plugin.start_engine()
+
+    assert plugin._bridge is None
+
+
+async def test_bridge_stops_with_engine(plugin, mock_subprocess, mock_server, mock_probe):
+    plugin._settings = {"port": mock_server.port, "autostart": False,
+                        "bridge_enabled": True, "bridge_device_map": {},
+                        "bridge_intensity_scale": 1.0}
+    await plugin.start_engine()
+    await plugin.stop_engine()
+
+    assert plugin._bridge is None
