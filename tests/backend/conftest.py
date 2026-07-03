@@ -29,11 +29,30 @@ async def mock_server():
 
 @pytest.fixture
 def mock_subprocess(monkeypatch):
-    """Prevent tests from launching the real intiface-engine binary."""
+    """Prevent tests from launching the real intiface-engine binary.
+
+    Models a process that keeps running until terminate()/kill() is called —
+    Plugin._monitor_engine() awaits .wait() proactively in the background as
+    soon as the process is spawned, so a naive AsyncMock(return_value=0) that
+    resolves instantly (regardless of terminate() ever being called) would
+    make every spawn look like an immediate unexpected crash.
+    """
     proc = MagicMock()
     proc.returncode = None
-    proc.terminate = MagicMock()
-    proc.wait = AsyncMock(return_value=0)
+    exited = asyncio.Event()
+
+    def _mark_exited():
+        proc.returncode = 0
+        exited.set()
+
+    proc.terminate = MagicMock(side_effect=_mark_exited)
+    proc.kill = MagicMock(side_effect=_mark_exited)
+
+    async def fake_wait():
+        await exited.wait()
+        return proc.returncode
+
+    proc.wait = fake_wait
 
     async def fake_exec(*args, **kwargs):
         return proc
@@ -43,10 +62,18 @@ def mock_subprocess(monkeypatch):
 
 
 @pytest_asyncio.fixture
-async def plugin(inject_decky, tmp_path):
+async def plugin(inject_decky, tmp_path, monkeypatch):
     """Fresh Plugin instance per test with its own isolated settings dir."""
     sys.modules.pop("main", None)
     import main  # noqa: PLC0415
+
+    # _port_in_use() does a real TCP connect; test fixtures like mock_server
+    # pre-bind a real local port to stand in for the engine (since
+    # create_subprocess_exec is mocked and never actually binds anything).
+    # Default it off here so existing tests aren't tripped by that — tests
+    # that want to exercise the real conflict-detection can monkeypatch it
+    # back per-test.
+    monkeypatch.setattr(main, "_port_in_use", AsyncMock(return_value=False))
 
     inject_decky.DECKY_PLUGIN_SETTINGS_DIR = str(tmp_path / "settings")
     inject_decky.DECKY_PLUGIN_DIR = str(tmp_path / "plugin")
@@ -111,8 +138,20 @@ async def mock_probe(monkeypatch, mock_subprocess):
     fake_probe_proc = MagicMock()
     fake_probe_proc.returncode = None
     fake_probe_proc.stdout = r_stream
-    fake_probe_proc.terminate = MagicMock()
-    fake_probe_proc.wait = AsyncMock(return_value=0)
+    probe_exited = asyncio.Event()
+
+    def _mark_probe_exited():
+        fake_probe_proc.returncode = 0
+        probe_exited.set()
+
+    fake_probe_proc.terminate = MagicMock(side_effect=_mark_probe_exited)
+    fake_probe_proc.kill = MagicMock(side_effect=_mark_probe_exited)
+
+    async def fake_probe_wait():
+        await probe_exited.wait()
+        return fake_probe_proc.returncode
+
+    fake_probe_proc.wait = fake_probe_wait
 
     async def fake_exec(program, *args, **kwargs):
         if "haptics-probe" in str(program):

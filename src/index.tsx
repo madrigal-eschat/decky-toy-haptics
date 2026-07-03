@@ -16,24 +16,28 @@ import { FaHeart } from 'react-icons/fa';
 
 const startEngine = callable<[], { success: boolean; error?: string }>('start_engine');
 const stopEngine = callable<[], { success: boolean }>('stop_engine');
-const getStatus = callable<[], { running: boolean; connected: boolean; port: number }>('get_status');
+const getStatus = callable<[], { running: boolean; connected: boolean; scanning: boolean; port: number }>('get_status');
 const getDevices = callable<[], { id: number; name: string; actuators: number }[]>('get_devices');
-const setBridgeEnabled = callable<[boolean], { success: boolean }>('set_bridge_enabled');
+const setBridgeEnabled = callable<[boolean], { success: boolean; error?: string }>('set_bridge_enabled');
 const listEvdevDevices = callable<[], { device: string; name: string; path: string }[]>('list_evdev_devices');
 const setBridgeScale = callable<[number], { success: boolean }>('set_bridge_scale');
+const startScan = callable<[], { success: boolean; error?: string }>('start_scan');
+const stopScan = callable<[], { success: boolean }>('stop_scan');
 
 type DeviceInfo = { id: number; name: string; actuators: number };
-type EngineStatus = { running: boolean; connected: boolean; port: number };
+type EngineStatus = { running: boolean; connected: boolean; scanning: boolean; port: number };
 type EvdevDevice = { device: string; name: string; path: string };
 
 function Content() {
   const [status, setStatus] = useState<EngineStatus>({
     running: false,
     connected: false,
+    scanning: false,
     port: 12345,
   });
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshStatus = async () => {
@@ -79,6 +83,19 @@ function Content() {
     }
   };
 
+  const handleScanToggle = async () => {
+    setScanLoading(true);
+    try {
+      if (status.scanning) {
+        await stopScan();
+      } else {
+        await startScan();
+      }
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
   return (
     <>
       <PanelSection title="Toy Haptics">
@@ -99,6 +116,20 @@ function Content() {
               : 'Disconnected'}
           </div>
         </PanelSectionRow>
+        {status.connected && (
+          <>
+            <PanelSectionRow>
+              <ButtonItem layout="below" onClick={handleScanToggle} disabled={scanLoading}>
+                {scanLoading ? 'Working…' : status.scanning ? 'Stop Scanning' : 'Scan for Toys'}
+              </ButtonItem>
+            </PanelSectionRow>
+            <PanelSectionRow>
+              <div style={{ fontSize: '12px', color: status.scanning ? '#8f8' : '#888' }}>
+                {status.scanning ? 'Scanning…' : 'Not scanning'}
+              </div>
+            </PanelSectionRow>
+          </>
+        )}
       </PanelSection>
 
       <BridgePanel />
@@ -125,6 +156,7 @@ function BridgePanel() {
   const [scale, setScale] = useState(1.0);
   const [devices, setDevices] = useState<EvdevDevice[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refreshDevices = async () => {
     const d = await listEvdevDevices();
@@ -146,10 +178,15 @@ function BridgePanel() {
 
   const handleToggle = async () => {
     setLoading(true);
+    setError(null);
     try {
-      await setBridgeEnabled(!enabled);
-      setEnabled(e => !e);
-      if (!enabled) await refreshDevices();
+      const result = await setBridgeEnabled(!enabled);
+      if (result.success) {
+        setEnabled(e => !e);
+        if (!enabled) await refreshDevices();
+      } else if (result.error) {
+        setError(result.error);
+      }
     } finally {
       setLoading(false);
     }
@@ -167,6 +204,11 @@ function BridgePanel() {
           {loading ? 'Working…' : enabled ? 'Disable Bridge' : 'Enable Bridge'}
         </ButtonItem>
       </PanelSectionRow>
+      {error && (
+        <PanelSectionRow>
+          <div style={{ color: '#f88', fontSize: '12px' }}>{error}</div>
+        </PanelSectionRow>
+      )}
       <PanelSectionRow>
         <div style={{ fontSize: '12px', color: enabled ? '#8f8' : '#888' }}>
           {enabled ? 'Active' : 'Inactive'}
@@ -230,6 +272,12 @@ export default definePlugin(() => {
     'bridge_status_changed', () => {}
   );
 
+  const scanStatusListener = addEventListener<[scanning: boolean]>(
+    'scan_status_changed', () => {
+      window.dispatchEvent(new CustomEvent('intiface:status_changed'));
+    }
+  );
+
   return {
     name: 'Toy Haptics',
     titleView: <div className={staticClasses.Title}>Toy Haptics</div>,
@@ -240,6 +288,7 @@ export default definePlugin(() => {
       removeEventListener('device_added', deviceAddedListener);
       removeEventListener('device_removed', deviceRemovedListener);
       removeEventListener('bridge_status_changed', bridgeStatusListener);
+      removeEventListener('scan_status_changed', scanStatusListener);
     },
   };
 });
