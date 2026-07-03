@@ -11,15 +11,18 @@ import {
   definePlugin,
 } from '@decky/api';
 import { useState, useEffect } from 'react';
-import { FaHeart } from 'react-icons/fa';
+import { FaHeart, FaVolumeUp, FaPowerOff } from 'react-icons/fa';
 
 const startEngine = callable<[], { success: boolean; error?: string }>('start_engine');
 const stopEngine = callable<[], { success: boolean }>('stop_engine');
 const getStatus = callable<[], { running: boolean; connected: boolean; port: number }>('get_status');
 const getDevices = callable<[], { id: number; name: string; actuators: number }[]>('get_devices');
+const setBridgeEnabled = callable<[enabled: boolean], { success: boolean }>('set_bridge_enabled');
+const setBridgeScale = callable<[scale: number], { success: boolean }>('set_bridge_scale');
+const setBridgeDeviceMap = callable<[map: { [key: string]: number[] }], { success: boolean }>('set_bridge_device_map');
 
 type DeviceInfo = { id: number; name: string; actuators: number };
-type EngineStatus = { running: boolean; connected: boolean; port: number };
+type EngineStatus = { running: boolean; connected: boolean; port: number; bridge_enabled: boolean; bridge_scale: number; bridge_device_map: { [key: string]: number[] } };
 
 function Content() {
   const [status, setStatus] = useState<EngineStatus>({
@@ -74,6 +77,19 @@ function Content() {
     }
   };
 
+  const handleSetDeviceMap = async (map: { [key: string]: number[] }) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await setBridgeDeviceMap({ map });
+      if (result.success) {
+        window.dispatchEvent(new CustomEvent('intiface:status_changed'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       <PanelSection title="Toy Haptics">
@@ -96,6 +112,83 @@ function Content() {
         </PanelSectionRow>
       </PanelSection>
 
+      <PanelSection title="Haptics Bridge">
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            onClick={async () => {
+              const result = await setBridgeEnabled(!status.bridge_enabled);
+              refreshStatus();
+            }}
+          >
+            <FaPowerOff style={{ marginRight: '8px' }} />
+            {status.bridge_enabled ? 'Disable Bridge' : 'Enable Bridge'}
+          </ButtonItem>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <div style={{ fontSize: '12px', color: status.bridge_enabled ? '#8f8' : '#888' }}>
+            {status.bridge_enabled
+              ? 'Bridge active — effects will be forwarded to toys'
+              : 'Bridge inactive — no haptic bridging'}
+          </div>
+        </PanelSectionRow>
+      </PanelSection>
+
+      <PanelSection title="Bridge Settings (optional)">
+        <PanelSectionRow>
+          <div style={{ fontSize: '12px', color: '#888' }}>
+            Intensity scaling: {status.bridge_scale?.toFixed(2)} or 1.00
+          </div>
+          <ButtonItem
+            layout="right"
+            onClick={async () => { await setBridgeScale(1.0); refreshStatus(); }}
+          >
+            <FaVolumeUp /> Reset 1.0
+          </ButtonItem>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <div style={{ fontSize: '12px', color: '#888' }}>
+            Device map (effect_id → device_index, JSON format)
+          </div>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <textarea
+            style={{
+              width: '100%',
+              minHeight: '80px',
+              fontSize: '11px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              backgroundColor: '#fff',
+            }}
+            placeholder='{"101": "1", "102": "2"}'
+            onChange={e => {
+              const map = JSON.parse(e.target.value || '{}');
+              window.dispatchEvent(new CustomEvent('intiface:map_changed', { detail: { map } }));
+            }}
+            defaultValue={JSON.stringify(status.bridge_device_map, null, 2) || '{}'}
+          />
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            disabled={!status.running}
+            onClick={async () => {
+              const mapJson = document.querySelector('textarea')?.value || '{}';
+              try {
+                const map = JSON.parse(mapJson);
+                await handleSetDeviceMap(map);
+                refreshStatus();
+              } catch (e) {
+                setError('Invalid JSON: ' + (e as Error).message);
+              }
+            }}
+          >
+            Apply Device Map
+          </ButtonItem>
+        </PanelSectionRow>
+      </PanelSection>
+
       <PanelSection title="Devices">
         {devices.length === 0 ? (
           <PanelSectionRow>
@@ -115,8 +208,8 @@ function Content() {
 
 export default definePlugin(() => {
   const engineStatusListener = addEventListener<
-    [running: boolean, connected: boolean, port: number]
-  >('engine_status_changed', (_running, _connected, _port) => {
+    [running: boolean, connected: boolean, port: number, bridge_enabled: boolean, bridge_scale: number]
+  >('engine_status_changed', (_running, _connected, _port, bridge_enabled, bridge_scale) => {
     window.dispatchEvent(new CustomEvent('intiface:status_changed'));
   });
 
