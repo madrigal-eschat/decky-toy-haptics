@@ -1377,7 +1377,7 @@ async def mock_probe(monkeypatch):
 - [ ] **Verify imports work**
 
 ```bash
-cd /Users/madrigal-eschat/Code/decky-intiface && python3 -c "import bson; print(bson.dumps({'x': 1}))"
+cd /Users/madrigal/Code/decky-intiface && python3 -c "import bson; print(bson.dumps({'x': 1}))"
 ```
 Expected: bytes output (no error).
 
@@ -1531,7 +1531,7 @@ async def test_set_bridge_enabled_emits_status_event(plugin, mock_subprocess, mo
 - [ ] **Run to confirm failure**
 
 ```bash
-cd /Users/madrigal-eschat/Code/decky-intiface && pytest tests/backend/test_haptics.py -v 2>&1 | head -30
+cd /Users/madrigal/Code/decky-intiface && pytest tests/backend/test_haptics.py -v 2>&1 | head -30
 ```
 Expected: `AttributeError` — `Plugin` has no `HapticsBridge`.
 
@@ -1673,7 +1673,7 @@ class HapticsBridge:
 - [ ] **Run tests**
 
 ```bash
-cd /Users/madrigal-eschat/Code/decky-intiface && pytest tests/backend/test_haptics.py -v 2>&1
+cd /Users/madrigal/Code/decky-intiface && pytest tests/backend/test_haptics.py -v 2>&1
 ```
 Expected: most tests pass. Fix any issues before committing.
 
@@ -1796,7 +1796,7 @@ async def test_update_settings_persists_bridge_fields(plugin, inject_decky):
 - [ ] **Run tests**
 
 ```bash
-cd /Users/madrigal-eschat/Code/decky-intiface && pytest tests/backend/ -v 2>&1 | tail -20
+cd /Users/madrigal/Code/decky-intiface && pytest tests/backend/ -v 2>&1 | tail -20
 ```
 Expected: all pass.
 
@@ -1871,7 +1871,7 @@ async def test_bridge_stops_with_engine(plugin, mock_subprocess, mock_server, mo
 - [ ] **Run full backend test suite**
 
 ```bash
-cd /Users/madrigal-eschat/Code/decky-intiface && pytest tests/backend/ -v 2>&1
+cd /Users/madrigal/Code/decky-intiface && pytest tests/backend/ -v 2>&1
 ```
 Expected: all pass. Fix any regressions before committing.
 
@@ -2011,7 +2011,7 @@ In `onDismount`:
 - [ ] **Build frontend**
 
 ```bash
-cd /Users/madrigal-eschat/Code/decky-intiface && pnpm run build 2>&1 | tail -10
+cd /Users/madrigal/Code/decky-intiface && pnpm run build 2>&1 | tail -10
 ```
 Expected: `dist/index.js` generated with no TypeScript errors.
 
@@ -2104,7 +2104,7 @@ test('device appears after bridge enabled', async ({ page }) => {
 - [ ] **Run frontend tests**
 
 ```bash
-cd /Users/madrigal-eschat/Code/decky-intiface && pnpm run test:ui 2>&1 | tail -20
+cd /Users/madrigal/Code/decky-intiface && pnpm run test:ui 2>&1 | tail -20
 ```
 Expected: all bridge tests pass.
 
