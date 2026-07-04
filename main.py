@@ -1,9 +1,8 @@
 import os
 import json
 import asyncio
-import struct
+import signal
 import decky
-import bson
 from datetime import datetime
 
 SETTINGS_FILE = "settings.json"
@@ -37,6 +36,31 @@ def _find_process_by_exe(bin_path: str) -> int | None:
         if exe == target:
             return int(entry)
     return None
+
+
+async def _kill_orphan_by_exe(bin_path: str) -> None:
+    """Kill any running process matching bin_path that this Plugin instance
+    doesn't have a handle to (e.g. left behind by a prior backend process
+    instance across a decky reload/uninstall, whose asyncio.subprocess.Process
+    object is gone but the OS-level child is still alive)."""
+    pid = _find_process_by_exe(bin_path)
+    if pid is None:
+        return
+    decky.logger.warning(f"killing orphaned process at {bin_path} (pid {pid})")
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return
+    for _ in range(20):
+        await asyncio.sleep(0.1)
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
 
 
 async def _port_in_use(port: int) -> bool:
@@ -75,24 +99,22 @@ class FileLogger:
 
 
 # ── HapticsBridge ────────────────────────────────────────────────────────────
-# Spawns haptics-probe, reads translated haptic point sequences over BSON
-# on stdout, and forwards them as Buttplug ScalarCmd calls to connected toys.
+# Spawns haptics-probe and hands it the buttplug websocket address, an
+# intensity scale, and the evdev-device -> buttplug-index map. Rust owns the
+# buttplug connection and all playback scheduling from there; Python only
+# manages the subprocess's lifecycle and tails its log output. Live scale
+# updates are pushed over the child's stdin as JSON lines.
 
 class HapticsBridge:
     def __init__(self) -> None:
-        self._client = None
-        self._scale: float = 1.0
-        self._device_map: dict = {}
         self._process: asyncio.subprocess.Process | None = None
-        self._reader_task: asyncio.Task | None = None
-        self._stderr_task: asyncio.Task | None = None
-        self._sequence_tasks: dict[str, asyncio.Task] = {}  # device_id → running sequence
+        self._log_task: asyncio.Task | None = None
         self._log: FileLogger | None = None
         self._monitor_task: asyncio.Task | None = None
         self._on_exit = None
         self._stopping = False
 
-    async def start(self, client, settings: dict, on_exit=None) -> None:
+    async def start(self, settings: dict, port: int, on_exit=None) -> None:
         bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "haptics-probe")
         existing_pid = _find_process_by_exe(bin_path)
         if existing_pid is not None:
@@ -100,20 +122,22 @@ class HapticsBridge:
                 f"haptics-probe is already running (pid {existing_pid}), not started by this plugin"
             )
 
-        self._client = client
-        self._scale = float(settings.get("bridge_intensity_scale", 1.0))
-        self._device_map = settings.get("bridge_device_map", {})
+        scale = float(settings.get("bridge_intensity_scale", 1.0))
+        device_map = settings.get("bridge_device_map", {})
         self._log = FileLogger("haptics-probe.log")
         self._on_exit = on_exit
         self._stopping = False
 
         self._process = await asyncio.create_subprocess_exec(
             bin_path,
+            "--ws-url", f"ws://127.0.0.1:{port}",
+            "--scale", str(scale),
+            "--device-map", json.dumps(device_map),
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
         )
-        self._reader_task = asyncio.create_task(self._reader_loop())
-        self._stderr_task = asyncio.create_task(self._log_stderr())
+        self._log_task = asyncio.create_task(self._log_stdout())
         self._monitor_task = asyncio.create_task(self._monitor_process())
 
     async def _monitor_process(self) -> None:
@@ -128,10 +152,10 @@ class HapticsBridge:
         if self._on_exit is not None:
             await self._on_exit()
 
-    async def _log_stderr(self) -> None:
-        assert self._process is not None and self._process.stderr is not None
+    async def _log_stdout(self) -> None:
+        assert self._process is not None and self._process.stdout is not None
         try:
-            async for line in self._process.stderr:
+            async for line in self._process.stdout:
                 self._log.write(line.decode(errors='replace').rstrip())
         except asyncio.CancelledError:
             pass
@@ -146,177 +170,41 @@ class HapticsBridge:
                 pass
             self._monitor_task = None
 
-        seq_tasks = list(self._sequence_tasks.values())
-        for task in seq_tasks:
-            task.cancel()
-        if seq_tasks:
-            await asyncio.gather(*seq_tasks, return_exceptions=True)
-        self._sequence_tasks.clear()
-
-        if self._client is not None:
-            for dev in self._client.devices.values():
-                if hasattr(dev, "actuators") and dev.actuators:
-                    try:
-                        await dev.actuators[0].command(0.0)
-                    except Exception:
-                        pass
-
-        if self._reader_task is not None:
-            self._reader_task.cancel()
+        if self._log_task is not None:
+            self._log_task.cancel()
             try:
-                await self._reader_task
+                await self._log_task
             except asyncio.CancelledError:
                 pass
-            self._reader_task = None
-
-        if self._stderr_task is not None:
-            self._stderr_task.cancel()
-            try:
-                await self._stderr_task
-            except asyncio.CancelledError:
-                pass
-            self._stderr_task = None
+            self._log_task = None
 
         if self._process is not None:
             if self._process.returncode is None:
+                # SIGTERM: haptics-probe's own signal handler stops all
+                # devices before exiting, so we don't need to do it here.
                 self._process.terminate()
                 try:
                     await asyncio.wait_for(self._process.wait(), timeout=2.0)
                 except asyncio.TimeoutError:
                     self._process.kill()
             self._process = None
+        else:
+            bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "haptics-probe")
+            await _kill_orphan_by_exe(bin_path)
 
         if self._log is not None:
             self._log.close()
             self._log = None
 
-        self._client = None
-
     async def update_scale(self, scale: float) -> None:
-        self._scale = max(0.0, min(1.0, scale))
-
-    async def _reader_loop(self) -> None:
-        assert self._process is not None and self._process.stdout is not None
-        reader = self._process.stdout
-        self._log.write("reader loop started")
-        try:
-            while True:
-                header = await reader.readexactly(4)
-                length = struct.unpack_from("<i", header)[0]
-                if length < 5:
-                    self._log.write(f"bogus BSON length {length}, skipping")
-                    continue
-                rest = await reader.readexactly(length - 4)
-                doc = bson.loads(header + rest)
-                await self._dispatch(doc)
-        except (asyncio.IncompleteReadError, asyncio.CancelledError):
-            self._log.write("reader loop ended (stream closed)")
-        except Exception as e:
-            self._log.write(f"reader error: {e}")
-
-    async def _dispatch(self, doc: dict) -> None:
-        msg_type = doc.get("type")
-        self._log.write(f"received doc type={msg_type!r} device={doc.get('device')!r}")
-        if msg_type == "haptic":
-            device = doc.get("device", "")
-            points = doc.get("points", [])
-            if points:
-                self._schedule_sequence(device, points)
-            else:
-                self._log.write("haptic doc had no points, ignoring")
-        elif msg_type == "stop":
-            device = doc.get("device", "")
-            await self._send_stop(device)
-
-    def _schedule_sequence(self, device: str, points: list) -> None:
-        if device in self._sequence_tasks:
-            self._sequence_tasks[device].cancel()
-        task = asyncio.create_task(self._play_sequence(device, points))
-        self._sequence_tasks[device] = task
-
-    @staticmethod
-    def _interpolate_points(points: list, step_ms: int = 10) -> list:
-        """Always hit each point's exact wall-time boundary; fill the gaps
-        between boundaries with linearly-interpolated samples every step_ms
-        so ramps read smoothly instead of jumping between sparse points."""
-        schedule: list = []
-        prev_dt = None
-        prev_intensity = None
-        for point in points:
-            dt_ms = int(point.get("dt_ms", 0))
-            intensity = float(point.get("intensity", 0.0))
-            if prev_dt is not None:
-                span = dt_ms - prev_dt
-                t = prev_dt + step_ms
-                while t < dt_ms:
-                    frac = (t - prev_dt) / span
-                    schedule.append((t, prev_intensity + (intensity - prev_intensity) * frac))
-                    t += step_ms
-            schedule.append((dt_ms, intensity))
-            prev_dt, prev_intensity = dt_ms, intensity
-        return schedule
-
-    async def _play_sequence(self, device: str, points: list) -> None:
-        send_task: asyncio.Task | None = None
-        try:
-            loop = asyncio.get_event_loop()
-            start = loop.time()
-            for t_ms, intensity in self._interpolate_points(points):
-                delay = start + (t_ms / 1000.0) - loop.time()
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                # at most one send in flight per device: a stale send
-                # completing late must never be able to clobber a fresher
-                # one, so supersede rather than let them stack up
-                if send_task is not None and not send_task.done():
-                    send_task.cancel()
-                send_task = asyncio.create_task(self._send_scalar(device, intensity * self._scale))
-            if send_task is not None:
-                await send_task
-        except asyncio.CancelledError:
-            if send_task is not None:
-                send_task.cancel()
-            raise
-        finally:
-            # only remove our own entry: a newer sequence may already have
-            # replaced this one in the dict by the time we get here after
-            # being cancelled, and popping unconditionally would delete the
-            # newer task's bookkeeping, leaving it unable to be cancelled
-            # by any subsequent retrigger (orphaned task keeps running).
-            if self._sequence_tasks.get(device) is asyncio.current_task():
-                self._sequence_tasks.pop(device, None)
-
-    async def _send_stop(self, device: str) -> None:
-        if device in self._sequence_tasks:
-            self._sequence_tasks[device].cancel()
-            self._sequence_tasks.pop(device, None)
-        await self._send_scalar(device, 0.0)
-
-    async def _send_scalar(self, device: str, intensity: float) -> None:
-        if self._client is None:
-            self._log.write(f"send_scalar({device!r}, {intensity}): no client, dropping")
-            return
-        targets = self._device_map.get(device)  # None = all
-        intensity = max(0.0, min(1.0, intensity))
-        sent = 0
-        for dev in self._client.devices.values():
-            if targets is not None and dev.index not in targets:
-                continue
+        scale = max(0.0, min(1.0, scale))
+        if self._process is not None and self._process.stdin is not None:
+            line = json.dumps({"scale": scale}) + "\n"
             try:
-                if hasattr(dev, "actuators") and dev.actuators:
-                    t0 = asyncio.get_event_loop().time()
-                    await dev.actuators[0].command(intensity)
-                    rtt_ms = (asyncio.get_event_loop().time() - t0) * 1000.0
-                    self._log.write(
-                        f"ScalarCmd device={dev.index} ({dev.name}) intensity={intensity:.3f} rtt={rtt_ms:.1f}ms"
-                    )
-                    sent += 1
-                else:
-                    self._log.write(f"device {dev.index} ({dev.name}) has no actuators, skipping")
-            except Exception as e:
-                self._log.write(f"ScalarCmd failed for device {dev.index}: {e}")
-        if sent == 0:
-            self._log.write(f"send_scalar({device!r}, {intensity}): no matching toy received it (client has {len(self._client.devices)} device(s))")
+                self._process.stdin.write(line.encode())
+                await self._process.stdin.drain()
+            except (ConnectionResetError, BrokenPipeError):
+                pass
 
 
 class Plugin:
@@ -456,6 +344,9 @@ class Plugin:
                     except asyncio.TimeoutError:
                         decky.logger.warning("intiface-engine did not die even after SIGKILL")
             self._process = None
+        else:
+            bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "intiface-engine")
+            await _kill_orphan_by_exe(bin_path)
         if self._engine_log is not None:
             self._engine_log.close()
             self._engine_log = None
@@ -582,7 +473,7 @@ class Plugin:
         try:
             if enabled and self._client is not None and self._bridge is None:
                 bridge = HapticsBridge()
-                await bridge.start(self._client, self._settings, on_exit=self._on_bridge_exit)
+                await bridge.start(self._settings, self._settings["port"], on_exit=self._on_bridge_exit)
                 self._bridge = bridge
             elif not enabled and self._bridge is not None:
                 await self._bridge.stop()
@@ -637,8 +528,9 @@ class Plugin:
 
             if self._settings.get("bridge_enabled", False) and self._bridge is None:
                 bridge = HapticsBridge()
-                await bridge.start(self._client, self._settings, on_exit=self._on_bridge_exit)
+                await bridge.start(self._settings, self._settings["port"], on_exit=self._on_bridge_exit)
                 self._bridge = bridge
+                await decky.emit("bridge_status_changed", True, self._settings.get("bridge_evdev_device"))
 
             return {"success": True}
         except Exception as e:
@@ -665,7 +557,12 @@ class Plugin:
             "connected": connected,
             "scanning": self._scanning,
             "port": self._settings.get("port", DEFAULT_SETTINGS["port"]),
+            # bridge_enabled reflects the saved setting (what the user asked
+            # for); bridge_running reflects whether it's actually alive right
+            # now — they can diverge (bridge failed to start, crashed, or the
+            # engine went down and took it with it) and the UI needs both.
             "bridge_enabled": self._settings.get("bridge_enabled", False),
+            "bridge_running": self._bridge is not None,
             "bridge_scale": self._settings.get("bridge_intensity_scale", 1.0),
             "bridge_device_map": self._settings.get("bridge_device_map", {}),
         }

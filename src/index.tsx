@@ -1,5 +1,6 @@
 import {
   ButtonItem,
+  Focusable,
   PanelSection,
   PanelSectionRow,
   SliderField,
@@ -16,7 +17,10 @@ import { FaHeart } from 'react-icons/fa';
 
 const startEngine = callable<[], { success: boolean; error?: string }>('start_engine');
 const stopEngine = callable<[], { success: boolean }>('stop_engine');
-const getStatus = callable<[], { running: boolean; connected: boolean; scanning: boolean; port: number }>('get_status');
+const getStatus = callable<[], {
+  running: boolean; connected: boolean; scanning: boolean; port: number;
+  bridge_enabled: boolean; bridge_running: boolean; bridge_scale: number;
+}>('get_status');
 const getDevices = callable<[], { id: number; name: string; actuators: number }[]>('get_devices');
 const setBridgeEnabled = callable<[boolean], { success: boolean; error?: string }>('set_bridge_enabled');
 const listEvdevDevices = callable<[], { device: string; name: string; path: string }[]>('list_evdev_devices');
@@ -104,17 +108,22 @@ function Content() {
             {loading ? 'Working…' : status.running ? 'Stop Engine' : 'Start Engine'}
           </ButtonItem>
         </PanelSectionRow>
+        <PanelSectionRow>
+          <Focusable style={{ fontSize: '11px', color: '#888' }}>
+            Some toys need this order: start the engine, scan, turn the toy on, then restart the engine.
+          </Focusable>
+        </PanelSectionRow>
         {error && (
           <PanelSectionRow>
-            <div style={{ color: '#f88', fontSize: '12px' }}>{error}</div>
+            <Focusable style={{ color: '#f88', fontSize: '12px' }}>{error}</Focusable>
           </PanelSectionRow>
         )}
         <PanelSectionRow>
-          <div style={{ fontSize: '12px', color: status.connected ? '#8f8' : '#888' }}>
+          <Focusable style={{ fontSize: '12px', color: status.connected ? '#8f8' : '#888' }}>
             {status.connected
               ? `Connected · port ${status.port}`
               : 'Disconnected'}
-          </div>
+          </Focusable>
         </PanelSectionRow>
         {status.connected && (
           <>
@@ -124,29 +133,29 @@ function Content() {
               </ButtonItem>
             </PanelSectionRow>
             <PanelSectionRow>
-              <div style={{ fontSize: '12px', color: status.scanning ? '#8f8' : '#888' }}>
+              <Focusable style={{ fontSize: '12px', color: status.scanning ? '#8f8' : '#888' }}>
                 {status.scanning ? 'Scanning…' : 'Not scanning'}
-              </div>
+              </Focusable>
             </PanelSectionRow>
           </>
         )}
       </PanelSection>
 
-      <BridgePanel />
-
       <PanelSection title="Devices">
         {devices.length === 0 ? (
           <PanelSectionRow>
-            <div style={{ fontSize: '12px', color: '#888' }}>No devices connected</div>
+            <Focusable style={{ fontSize: '12px', color: '#888' }}>No devices connected</Focusable>
           </PanelSectionRow>
         ) : (
           devices.map(dev => (
             <PanelSectionRow key={dev.id}>
-              <div style={{ fontSize: '13px' }}>{dev.name}</div>
+              <Focusable style={{ fontSize: '13px' }}>{dev.name}</Focusable>
             </PanelSectionRow>
           ))
         )}
       </PanelSection>
+
+      <BridgePanel />
     </>
   );
 }
@@ -166,6 +175,14 @@ function BridgePanel() {
   useEffect(() => {
     refreshDevices();
 
+    (async () => {
+      const s = await getStatus();
+      if (s) {
+        setEnabled(s.bridge_running);
+        setScale(s.bridge_scale);
+      }
+    })();
+
     const onBridgeStatus = (_enabled: boolean, _device: string | null) => {
       setEnabled(_enabled);
       if (_enabled) void refreshDevices();
@@ -181,12 +198,11 @@ function BridgePanel() {
     setError(null);
     try {
       const result = await setBridgeEnabled(!enabled);
-      if (result.success) {
-        setEnabled(e => !e);
-        if (!enabled) await refreshDevices();
-      } else if (result.error) {
+      if (!result.success && result.error) {
         setError(result.error);
       }
+      // enabled state itself is set by the bridge_status_changed listener,
+      // which is the authoritative source and can race with this resolving
     } finally {
       setLoading(false);
     }
@@ -204,29 +220,34 @@ function BridgePanel() {
           {loading ? 'Working…' : enabled ? 'Disable Bridge' : 'Enable Bridge'}
         </ButtonItem>
       </PanelSectionRow>
+      <PanelSectionRow>
+        <Focusable style={{ fontSize: '11px', color: '#888' }}>
+          Restarting the bridge will require restarting most games to pick haptics back up.
+        </Focusable>
+      </PanelSectionRow>
       {error && (
         <PanelSectionRow>
-          <div style={{ color: '#f88', fontSize: '12px' }}>{error}</div>
+          <Focusable style={{ color: '#f88', fontSize: '12px' }}>{error}</Focusable>
         </PanelSectionRow>
       )}
       <PanelSectionRow>
-        <div style={{ fontSize: '12px', color: enabled ? '#8f8' : '#888' }}>
+        <Focusable style={{ fontSize: '12px', color: enabled ? '#8f8' : '#888' }}>
           {enabled ? 'Active' : 'Inactive'}
-        </div>
+        </Focusable>
       </PanelSectionRow>
       {devices.length > 0 && (
         <>
           <PanelSectionRow>
-            <div style={{ fontSize: '11px', color: '#aaa', marginTop: 4 }}>Source Devices</div>
+            <Focusable style={{ fontSize: '11px', color: '#aaa', marginTop: 4 }}>Source Devices</Focusable>
           </PanelSectionRow>
           {devices.map(d => (
             <PanelSectionRow key={d.device}>
-              <div style={{ fontSize: '12px' }}>
+              <Focusable style={{ fontSize: '12px' }}>
                 <span style={{ color: '#ccc' }}>{d.device}</span>
                 {' '}{d.name}
                 <br />
                 <span style={{ fontSize: '11px', color: '#888' }}>→ All toys</span>
-              </div>
+              </Focusable>
             </PanelSectionRow>
           ))}
         </>
