@@ -59,3 +59,5 @@ backend/out/
 backend/haptics-probe/target
 backend/.cargo-home
 bin/
+
+.claude/settings.local.json
