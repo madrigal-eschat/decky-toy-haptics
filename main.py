@@ -99,7 +99,7 @@ class FileLogger:
 
 
 # ── HapticsBridge ────────────────────────────────────────────────────────────
-# Spawns haptics-probe and hands it the buttplug websocket address, an
+# Spawns game-haptics-router and hands it the buttplug websocket address, an
 # intensity scale, and the evdev-device -> buttplug-index map. Rust owns the
 # buttplug connection and all playback scheduling from there; Python only
 # manages the subprocess's lifecycle and tails its log output. Live scale
@@ -115,16 +115,16 @@ class HapticsBridge:
         self._stopping = False
 
     async def start(self, settings: dict, port: int, on_exit=None) -> None:
-        bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "haptics-probe")
+        bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "game-haptics-router")
         existing_pid = _find_process_by_exe(bin_path)
         if existing_pid is not None:
             raise RuntimeError(
-                f"haptics-probe is already running (pid {existing_pid}), not started by this plugin"
+                f"game-haptics-router is already running (pid {existing_pid}), not started by this plugin"
             )
 
         scale = float(settings.get("bridge_intensity_scale", 1.0))
         device_map = settings.get("bridge_device_map", {})
-        self._log = FileLogger("haptics-probe.log")
+        self._log = FileLogger("game-haptics-router.log")
         self._on_exit = on_exit
         self._stopping = False
 
@@ -148,7 +148,7 @@ class HapticsBridge:
         if self._stopping:
             return
         if self._log is not None:
-            self._log.write(f"haptics-probe exited unexpectedly (code {returncode})")
+            self._log.write(f"game-haptics-router exited unexpectedly (code {returncode})")
         if self._on_exit is not None:
             await self._on_exit()
 
@@ -180,7 +180,7 @@ class HapticsBridge:
 
         if self._process is not None:
             if self._process.returncode is None:
-                # SIGTERM: haptics-probe's own signal handler stops all
+                # SIGTERM: game-haptics-router's own signal handler stops all
                 # devices before exiting, so we don't need to do it here.
                 self._process.terminate()
                 try:
@@ -189,7 +189,7 @@ class HapticsBridge:
                     self._process.kill()
             self._process = None
         else:
-            bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "haptics-probe")
+            bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "game-haptics-router")
             await _kill_orphan_by_exe(bin_path)
 
         if self._log is not None:
@@ -464,7 +464,7 @@ class Plugin:
     # ── Haptics bridge callables ─────────────────────────────────────────────
 
     async def _on_bridge_exit(self) -> None:
-        decky.logger.warning("haptics-probe exited unexpectedly")
+        decky.logger.warning("game-haptics-router exited unexpectedly")
         self._bridge = None
         device = self._settings.get("bridge_evdev_device")
         await decky.emit("bridge_status_changed", False, device)
@@ -489,7 +489,7 @@ class Plugin:
         return {"success": True}
 
     async def list_evdev_devices(self) -> list:
-        bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "haptics-probe")
+        bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "game-haptics-router")
         try:
             proc = await asyncio.create_subprocess_exec(
                 bin_path, "--list-devices",
