@@ -12,16 +12,16 @@ HAPTICS_ROUTER_URL = https://github.com/madrigal-eschat/linux-game-haptics-route
 
 .PHONY: all clean
 
-all: ./out/intiface-engine ./out/haptics-probe
+all: ./out/intiface-engine ./out/game-haptics-router
 
 ./out/intiface-engine:
 	mkdir -p ./out
 	$(MAKE) -s -C py build
 
-./out/haptics-probe:
+./out/game-haptics-router:
 	mkdir -p ./out
-	curl -fL -o ./out/haptics-probe "$(HAPTICS_ROUTER_URL)"
-	chmod +x ./out/haptics-probe
+	curl -fL -o ./out/game-haptics-router "$(HAPTICS_ROUTER_URL)"
+	chmod +x ./out/game-haptics-router
 
 clean:
 	rm -rf ./out
