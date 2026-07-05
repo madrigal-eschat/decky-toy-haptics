@@ -7,7 +7,7 @@ export INTIFACE_ENGINE_URL = https://github.com/buttplugio/buttplug/releases/dow
 # yet, so this URL 404s until linux-game-haptics-router ships v0.1.0 — bump
 # HAPTICS_PROBE_VERSION (or override it on the make invocation) once it has.
 HAPTICS_PROBE_VERSION ?= v0.1.0
-HAPTICS_PROBE_FILENAME = haptics-probe-x86_64-unknown-linux-musl
+HAPTICS_PROBE_FILENAME = game-haptics-router-x86_64-unknown-linux-musl
 HAPTICS_PROBE_URL = https://github.com/madrigal-eschat/linux-game-haptics-router/releases/download/$(HAPTICS_PROBE_VERSION)/$(HAPTICS_PROBE_FILENAME)
 
 .PHONY: all clean
