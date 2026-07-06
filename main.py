@@ -105,6 +105,7 @@ class FileLogger:
 # manages the subprocess's lifecycle and tails its log output. Live scale
 # updates are pushed over the child's stdin as JSON lines.
 
+
 class HapticsBridge:
     def __init__(self) -> None:
         self._process: asyncio.subprocess.Process | None = None
@@ -130,9 +131,12 @@ class HapticsBridge:
 
         self._process = await asyncio.create_subprocess_exec(
             bin_path,
-            "--ws-url", f"ws://127.0.0.1:{port}",
-            "--scale", str(scale),
-            "--device-map", json.dumps(device_map),
+            "--ws-url",
+            f"ws://127.0.0.1:{port}",
+            "--scale",
+            str(scale),
+            "--device-map",
+            json.dumps(device_map),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -148,7 +152,9 @@ class HapticsBridge:
         if self._stopping:
             return
         if self._log is not None:
-            self._log.write(f"game-haptics-router exited unexpectedly (code {returncode})")
+            self._log.write(
+                f"game-haptics-router exited unexpectedly (code {returncode})"
+            )
         if self._on_exit is not None:
             await self._on_exit()
 
@@ -156,7 +162,7 @@ class HapticsBridge:
         assert self._process is not None and self._process.stdout is not None
         try:
             async for line in self._process.stdout:
-                self._log.write(line.decode(errors='replace').rstrip())
+                self._log.write(line.decode(errors="replace").rstrip())
         except asyncio.CancelledError:
             pass
 
@@ -189,7 +195,9 @@ class HapticsBridge:
                     self._process.kill()
             self._process = None
         else:
-            bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "game-haptics-router")
+            bin_path = os.path.join(
+                decky.DECKY_PLUGIN_DIR, "bin", "game-haptics-router"
+            )
             await _kill_orphan_by_exe(bin_path)
 
         if self._log is not None:
@@ -239,7 +247,9 @@ class Plugin:
             json.dump(self._settings, f)
 
     async def update_settings(
-        self, port: int | None = None, autostart: bool | None = None,
+        self,
+        port: int | None = None,
+        autostart: bool | None = None,
         bridge_enabled: bool | None = None,
         bridge_intensity_scale: float | None = None,
         bridge_device_map: dict | None = None,
@@ -278,7 +288,8 @@ class Plugin:
         self._engine_stopping = False
         self._process = await asyncio.create_subprocess_exec(
             bin_path,
-            "--websocket-port", str(port),
+            "--websocket-port",
+            str(port),
             "--use-bluetooth-le",
             "--use-lovense-dongle-hid",
             "--use-lovense-connect",
@@ -308,7 +319,7 @@ class Plugin:
         assert self._process is not None and self._process.stdout is not None
         try:
             async for line in self._process.stdout:
-                text = line.decode(errors='replace').rstrip()
+                text = line.decode(errors="replace").rstrip()
                 self._engine_log.write(text)
                 self._process_log_tail.append(text)
                 if len(self._process_log_tail) > 20:
@@ -342,7 +353,9 @@ class Plugin:
                     try:
                         await asyncio.wait_for(self._process.wait(), timeout=2.0)
                     except asyncio.TimeoutError:
-                        decky.logger.warning("intiface-engine did not die even after SIGKILL")
+                        decky.logger.warning(
+                            "intiface-engine did not die even after SIGKILL"
+                        )
             self._process = None
         else:
             bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "intiface-engine")
@@ -353,7 +366,9 @@ class Plugin:
 
     # ── Buttplug client ───────────────────────────────────────────────────────
 
-    async def _connect_client_with_retry(self, attempts: int = 5, initial_delay: float = 0.5) -> None:
+    async def _connect_client_with_retry(
+        self, attempts: int = 5, initial_delay: float = 0.5
+    ) -> None:
         delay = initial_delay
         last_err: Exception | None = None
         for attempt in range(1, attempts + 1):
@@ -377,6 +392,7 @@ class Plugin:
 
     async def _connect_client(self) -> None:
         from buttplug import Client, WebsocketConnector, ProtocolSpec  # lazy import
+
         port = self._settings["port"]
         self._client = Client("decky-toy-haptics", ProtocolSpec.v3)
         connector = WebsocketConnector(f"ws://127.0.0.1:{port}")
@@ -388,7 +404,9 @@ class Plugin:
         for dev_id, dev in self._client.devices.items():
             actuators = len(dev.actuators) if hasattr(dev, "actuators") else 0
             self._devices[dev_id] = dev
-            decky.logger.info(f"Device already known on connect: {dev.name} (id={dev_id}, actuators={actuators})")
+            decky.logger.info(
+                f"Device already known on connect: {dev.name} (id={dev_id}, actuators={actuators})"
+            )
             await decky.emit("device_added", dev_id, dev.name, actuators)
 
         decky.logger.info(f"Initial device count: {len(self._devices)}")
@@ -441,7 +459,9 @@ class Plugin:
                     dev = current[dev_id]
                     actuators = len(dev.actuators) if hasattr(dev, "actuators") else 0
                     self._devices[dev_id] = dev
-                    decky.logger.info(f"Device added: {dev.name} (id={dev_id}, actuators={actuators})")
+                    decky.logger.info(
+                        f"Device added: {dev.name} (id={dev_id}, actuators={actuators})"
+                    )
                     await decky.emit("device_added", dev_id, dev.name, actuators)
                 for dev_id in list(removed):
                     decky.logger.info(f"Device removed: id={dev_id}")
@@ -473,7 +493,9 @@ class Plugin:
         try:
             if enabled and self._client is not None and self._bridge is None:
                 bridge = HapticsBridge()
-                await bridge.start(self._settings, self._settings["port"], on_exit=self._on_bridge_exit)
+                await bridge.start(
+                    self._settings, self._settings["port"], on_exit=self._on_bridge_exit
+                )
                 self._bridge = bridge
             elif not enabled and self._bridge is not None:
                 await self._bridge.stop()
@@ -492,7 +514,8 @@ class Plugin:
         bin_path = os.path.join(decky.DECKY_PLUGIN_DIR, "bin", "game-haptics-router")
         try:
             proc = await asyncio.create_subprocess_exec(
-                bin_path, "--list-devices",
+                bin_path,
+                "--list-devices",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -524,19 +547,29 @@ class Plugin:
                 )
 
             await self._connect_client_with_retry()
-            await decky.emit("engine_status_changed", True, True, self._settings["port"])
+            await decky.emit(
+                "engine_status_changed", True, True, self._settings["port"]
+            )
 
             if self._settings.get("bridge_enabled", False) and self._bridge is None:
                 bridge = HapticsBridge()
-                await bridge.start(self._settings, self._settings["port"], on_exit=self._on_bridge_exit)
+                await bridge.start(
+                    self._settings, self._settings["port"], on_exit=self._on_bridge_exit
+                )
                 self._bridge = bridge
-                await decky.emit("bridge_status_changed", True, self._settings.get("bridge_evdev_device"))
+                await decky.emit(
+                    "bridge_status_changed",
+                    True,
+                    self._settings.get("bridge_evdev_device"),
+                )
 
             return {"success": True}
         except Exception as e:
             decky.logger.error(f"start_engine failed: {e}")
             await self._stop_subprocess()
-            await decky.emit("engine_status_changed", False, False, self._settings["port"])
+            await decky.emit(
+                "engine_status_changed", False, False, self._settings["port"]
+            )
             await decky.emit("error", str(e))
             return {"success": False, "error": str(e)}
 

@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import websockets
 import websockets.server
 
@@ -54,14 +54,20 @@ class MockIntifaceServer:
         msg_id = payload.get("Id", 0)
 
         if msg_type == "RequestServerInfo":
-            await websocket.send(json.dumps([{
-                "ServerInfo": {
-                    "Id": msg_id,
-                    "MessageVersion": 3,
-                    "MaxPingTime": 0,
-                    "ServerName": "mock-intiface",
-                }
-            }]))
+            await websocket.send(
+                json.dumps(
+                    [
+                        {
+                            "ServerInfo": {
+                                "Id": msg_id,
+                                "MessageVersion": 3,
+                                "MaxPingTime": 0,
+                                "ServerName": "mock-intiface",
+                            }
+                        }
+                    ]
+                )
+            )
 
         elif msg_type == "RequestDeviceList":
             devices = [
@@ -74,23 +80,29 @@ class MockIntifaceServer:
                 }
                 for d in self._fake_devices
             ]
-            await websocket.send(json.dumps([
-                {"DeviceList": {"Id": msg_id, "Devices": devices}}
-            ]))
+            await websocket.send(
+                json.dumps([{"DeviceList": {"Id": msg_id, "Devices": devices}}])
+            )
 
         elif msg_type == "StartScanning":
             await websocket.send(json.dumps([{"Ok": {"Id": msg_id}}]))
             for d in self._fake_devices:
-                await websocket.send(json.dumps([{
-                    "DeviceAdded": {
-                        "Id": 0,
-                        "DeviceIndex": d.index,
-                        "DeviceName": d.name,
-                        "DeviceDisplayName": d.name,
-                        "DeviceMessageTimingGap": 0,
-                        "DeviceMessages": _device_messages_schema(),
-                    }
-                }]))
+                await websocket.send(
+                    json.dumps(
+                        [
+                            {
+                                "DeviceAdded": {
+                                    "Id": 0,
+                                    "DeviceIndex": d.index,
+                                    "DeviceName": d.name,
+                                    "DeviceDisplayName": d.name,
+                                    "DeviceMessageTimingGap": 0,
+                                    "DeviceMessages": _device_messages_schema(),
+                                }
+                            }
+                        ]
+                    )
+                )
             await websocket.send(json.dumps([{"ScanningFinished": {"Id": 0}}]))
 
         elif msg_type == "StopScanning":

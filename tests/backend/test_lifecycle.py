@@ -59,7 +59,9 @@ async def test_stop_engine_terminates_subprocess(plugin, mock_subprocess, mock_s
     mock_subprocess.terminate.assert_called_once()
 
 
-async def test_stop_engine_emits_disconnected_event(plugin, mock_subprocess, mock_server):
+async def test_stop_engine_emits_disconnected_event(
+    plugin, mock_subprocess, mock_server
+):
     plugin._settings = {"port": mock_server.port, "autostart": False}
     await plugin.start_engine()
     emit_recorder.reset()
@@ -87,7 +89,9 @@ async def test_get_status_not_running_after_stop(plugin, mock_subprocess, mock_s
 async def test_main_starts_engine_when_autostart_true(
     plugin, mock_subprocess, mock_server, inject_decky
 ):
-    settings_path = os.path.join(inject_decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
+    settings_path = os.path.join(
+        inject_decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json"
+    )
     with open(settings_path, "w") as f:
         json.dump({"port": mock_server.port, "autostart": True}, f)
 
@@ -101,7 +105,9 @@ async def test_main_starts_engine_when_autostart_true(
 async def test_main_does_not_start_engine_when_autostart_false(
     plugin, mock_subprocess, mock_server, inject_decky
 ):
-    settings_path = os.path.join(inject_decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
+    settings_path = os.path.join(
+        inject_decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json"
+    )
     with open(settings_path, "w") as f:
         json.dump({"port": mock_server.port, "autostart": False}, f)
 
