@@ -183,7 +183,7 @@ function BridgePanel() {
       }
     })();
 
-    const onBridgeStatus = (_enabled: boolean, _device: string | null) => {
+    const onBridgeStatus = (_enabled: boolean) => {
       setEnabled(_enabled);
       if (_enabled) void refreshDevices();
     };
@@ -277,14 +277,14 @@ export default definePlugin(() => {
 
   const deviceAddedListener = addEventListener<[id: number, name: string, actuators: number]>(
     'device_added',
-    (_id, _name, _actuators) => {
+    () => {
       window.dispatchEvent(new CustomEvent('intiface:devices_changed'));
     }
   );
 
   const deviceRemovedListener = addEventListener<[id: number]>(
     'device_removed',
-    (_id) => {
+    () => {
       window.dispatchEvent(new CustomEvent('intiface:devices_changed'));
     }
   );
