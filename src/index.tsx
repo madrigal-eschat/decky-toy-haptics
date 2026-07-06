@@ -179,7 +179,7 @@ function BridgePanel() {
       const s = await getStatus();
       if (s) {
         setEnabled(s.bridge_running);
-        setScale(s.bridge_scale);
+        if (typeof s.bridge_scale === 'number') setScale(s.bridge_scale);
       }
     })();
 
