@@ -115,4 +115,3 @@ The React frontend polls the backend on mount and listens to Decky events to kee
 ## License
 
 BSD-3-Clause. See [LICENSE](LICENSE).
-

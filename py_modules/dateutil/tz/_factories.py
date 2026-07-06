@@ -77,4 +77,3 @@ class _TzStrFactory(_TzFactory):
                 cls.__strong_cache.popitem(last=False)
 
         return instance
-
