@@ -7,6 +7,9 @@ on:
 env:
   DECKY_CLI_VERSION: "0.0.8"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
