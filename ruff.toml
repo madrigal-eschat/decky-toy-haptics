@@ -9,3 +9,9 @@ extend-exclude = [
     ".agents",
     "decky.pyi",
 ]
+
+# pre-commit passes explicit file paths (see .pre-commit-config.yaml's `files:`
+# regex, which includes py_modules/) — ruff ignores exclude/extend-exclude for
+# explicitly-passed paths unless force-exclude is set. Set it so the excludes
+# above are actually honored in the pre-commit/CI hook, not just in ad-hoc runs.
+force-exclude = true
