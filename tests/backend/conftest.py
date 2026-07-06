@@ -92,6 +92,7 @@ async def plugin(inject_decky, tmp_path, monkeypatch):
 async def wait_for_emit(event_name: str, timeout: float = 2.0) -> list[tuple]:
     """Poll until at least one event with the given name has been recorded."""
     import asyncio as _aio
+
     deadline = _aio.get_event_loop().time() + timeout
     while _aio.get_event_loop().time() < deadline:
         events = emit_recorder.events_named(event_name)

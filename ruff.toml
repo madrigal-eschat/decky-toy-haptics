@@ -1,0 +1,17 @@
+target-version = "py310"
+
+# py_modules: vendored third-party pip packages (bson, buttplug, dateutil, six,
+#   websockets) — not our code, don't lint/reformat upstream sources.
+# .agents: unrelated Claude Code skill scripts, outside this project's source.
+# decky.pyi: vendored Decky SDK stub, not maintained in this repo.
+extend-exclude = [
+    "py_modules",
+    ".agents",
+    "decky.pyi",
+]
+
+# pre-commit passes explicit file paths (see .pre-commit-config.yaml's `files:`
+# regex, which includes py_modules/) — ruff ignores exclude/extend-exclude for
+# explicitly-passed paths unless force-exclude is set. Set it so the excludes
+# above are actually honored in the pre-commit/CI hook, not just in ad-hoc runs.
+force-exclude = true

@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DECKY_CLI_VERSION: "0.0.8"
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - run: pnpm i
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.semantic.outputs.new_release_published == 'true'
+      - name: Install Decky CLI
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          curl -fL -o decky "https://github.com/SteamDeckHomebrew/cli/releases/download/${DECKY_CLI_VERSION}/decky-linux-x86_64"
+          chmod +x decky
+          sudo mv decky /usr/local/bin/decky
+      - name: Build plugin
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: decky plugin build
+      - name: Upload release asset
+        if: steps.semantic.outputs.new_release_published == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ steps.semantic.outputs.new_release_git_tag }}" out/*.zip --repo "${{ github.repository }}"

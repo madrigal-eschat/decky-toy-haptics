@@ -1,7 +1,7 @@
 # Design: decky-intiface Plugin
 
-**Date:** 2026-06-26  
-**Status:** Approved  
+**Date:** 2026-06-26
+**Status:** Approved
 **Scope:** Full plugin design with phased delivery. MVP is delivered first; later phases are designed now so architecture decisions don't need revisiting.
 
 ---

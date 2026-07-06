@@ -32,3 +32,47 @@ export function ButtonItem({
     </button>
   );
 }
+
+export function Focusable({
+  children,
+  style,
+}: {
+  children?: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return <div style={style}>{children}</div>;
+}
+
+export function SliderField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  showValue: _showValue,
+  valueSuffix: _valueSuffix,
+  onChange,
+}: {
+  label?: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  showValue?: boolean;
+  valueSuffix?: string;
+  onChange?: (value: number) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={e => onChange?.(e.target.valueAsNumber)}
+      />
+    </label>
+  );
+}

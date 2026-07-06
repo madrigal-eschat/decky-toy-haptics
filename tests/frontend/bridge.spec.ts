@@ -10,7 +10,14 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await page.evaluate(() => {
     const a = (window as unknown as { __deckyTestAPI__: TestAPI })['__deckyTestAPI__'];
-    a.mockCallable('get_status', async () => ({ running: true, connected: true, port: 12345 }));
+    a.mockCallable('get_status', async () => ({
+      running: true,
+      connected: true,
+      port: 12345,
+      bridge_enabled: false,
+      bridge_running: false,
+      bridge_scale: 1.0,
+    }));
     a.mockCallable('get_devices', async () => []);
     a.mockCallable('list_evdev_devices', async () => [
       { device: 'steam-input/0', name: 'Steam Virtual Gamepad', path: '/dev/input/event5' },
@@ -49,7 +56,7 @@ test('bridge_status_changed event updates indicator', async ({ page }) => {
 
 test('scale slider calls set_bridge_scale', async ({ page }) => {
   const slider = page.locator('input[type=range]');
-  await slider.fill('0.5');
+  await slider.fill('50');
 
   await page.waitForTimeout(200);
   const calls = await page.evaluate(() =>

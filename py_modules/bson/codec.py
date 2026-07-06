@@ -191,7 +191,7 @@ def encode_value(name, value, buf, traversal_stack,
             buf.write(encode_int64_element(name, value))
         elif value > 0x7FFFFFFFFFFFFFFF:
             if value > 0xFFFFFFFFFFFFFFFF:
-                raise Exception("BSON format supports only int value < %s" % 0xFFFFFFFFFFFFFFFF) 
+                raise Exception("BSON format supports only int value < %s" % 0xFFFFFFFFFFFFFFFF)
             buf.write(encode_uint64_element(name, value))
         else:
             buf.write(encode_int32_element(name, value))

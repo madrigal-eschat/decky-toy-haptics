@@ -1,7 +1,7 @@
 # Design: Phase 2 — evdev Haptics Bridge
 
-**Date:** 2026-06-27  
-**Status:** Approved  
+**Date:** 2026-06-27
+**Status:** Approved
 **Scope:** Phase 2 of the decky-toy-haptics plugin. Intercepts Steam Input force-feedback effects via eBPF and forwards them as Buttplug `ScalarCmd` sequences to connected toys.
 
 ---
@@ -191,7 +191,7 @@ class HapticsBridge:
 
 ### Lifecycle integration
 
-`_main()` → after engine starts and buttplug client connects → if `bridge_enabled`, call `HapticsBridge.start()`.  
+`_main()` → after engine starts and buttplug client connects → if `bridge_enabled`, call `HapticsBridge.start()`.
 `_unload()` → `HapticsBridge.stop()` before engine stop.
 
 `bson` package added to `py_modules/` for BSON decoding.
