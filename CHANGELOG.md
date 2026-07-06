@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/madrigal-eschat/decky-toy-haptics/compare/v1.0.0...v1.0.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* disable github release success/fail comments to avoid issue-link crash ([78179a3](https://github.com/madrigal-eschat/decky-toy-haptics/commit/78179a3341afe58a3ca63d6b00cf0757d2b830ca))
+
 # 1.0.0 (2026-07-06)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "decky-toy-haptics",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Route Steam Deck game haptics to Buttplug-compatible toys via a bundled intiface-engine.",
   "type": "module",
   "packageManager": "pnpm@10.34.4",
