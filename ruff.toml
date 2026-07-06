@@ -1,5 +1,9 @@
 target-version = "py310"
 
+# py_modules: vendored third-party pip packages (bson, buttplug, dateutil, six,
+#   websockets) — not our code, don't lint/reformat upstream sources.
+# .agents: unrelated Claude Code skill scripts, outside this project's source.
+# decky.pyi: vendored Decky SDK stub, not maintained in this repo.
 extend-exclude = [
     "py_modules",
     ".agents",
