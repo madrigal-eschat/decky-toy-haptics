@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track linux-game-haptics-router release tags pinned in backend/Makefile (not a package-manager ecosystem Renovate detects natively)",
+      "fileMatch": ["^backend/Makefile$"],
+      "matchStrings": [
+        "HAPTICS_ROUTER_VERSION \\?= (?<currentValue>v?\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "madrigal-eschat/linux-game-haptics-router",
+      "versioningTemplate": "semver"
+    }
+  ]
+}
