@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "Route Steam Deck game haptics to Buttplug-compatible toys via a bundled intiface-engine.",
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c -w",
