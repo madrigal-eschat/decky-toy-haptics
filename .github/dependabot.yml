@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+# Dependabot has no ecosystem for tracking a plain Makefile variable, so it
+# cannot watch HAPTICS_ROUTER_VERSION/HAPTICS_ROUTER_FILENAME (backend/Makefile)
+# against linux-game-haptics-router's releases. If that needs automating,
+# vendor it as a git submodule instead (package-ecosystem: "gitsubmodule"),
+# or add a scheduled Action that diffs the latest release tag and opens a PR.
