@@ -16,7 +16,7 @@
     {
       "customType": "regex",
       "description": "Track Decky CLI release used to build the plugin zip in CI",
-      "fileMatch": ["^\\.github/workflows/build-release\\.yml$"],
+      "fileMatch": ["^\\.github/workflows/release\\.yml$"],
       "matchStrings": [
         "DECKY_CLI_VERSION: \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""
       ],
